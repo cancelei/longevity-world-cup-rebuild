@@ -12,6 +12,9 @@
 
 # testing
 /coverage
+/playwright-report/
+/test-results/
+/src/test-lab-images/
 
 # next.js
 /.next/
