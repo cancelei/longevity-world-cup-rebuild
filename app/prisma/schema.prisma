@@ -1,0 +1,574 @@
+// ============================================================================
+// Longevity World Cup 2.0 - Database Schema
+// ============================================================================
+//
+// Domain-Driven Design Overview:
+//
+// BOUNDED CONTEXTS:
+// 1. Identity & Access - User authentication and authorization
+// 2. Competition - Athletes, submissions, and rankings
+// 3. Leagues - Team-based competition and organization
+// 4. Gamification - Badges, achievements, and engagement features
+//
+// AGGREGATES:
+// - User (root) -> Athlete -> Submissions, Badges, LeagueMemberships
+// - League (root) -> Members, Invites, Subscriptions, LeaderboardEntries
+// - Season (root) -> Submissions, LeaderboardEntries, Events
+//
+// EXTENSION POINTS:
+// - Add new biomarkers: Extend BiomarkerSubmission model
+// - Add league types: Extend LeagueType enum
+// - Add badge categories: Extend Badge.category field
+// - Add event types: Extend Event.type field
+// - Add payment providers: Extend LeagueSubscription with new fields
+//
+// ============================================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  // PostgreSQL for production
+  // For local development, use docker-compose.dev.yml
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// BOUNDED CONTEXT: Identity & Access
+// ============================================
+// Handles user identity, authentication (via Clerk), and role-based access.
+// User is the entry point; Athletes are created after onboarding.
+
+model User {
+  id        String   @id @default(cuid())
+  clerkId   String   @unique
+  email     String   @unique
+  firstName String?
+  lastName  String?
+  imageUrl  String?
+  role      String   @default("USER") // USER, ATHLETE, ADMIN, MODERATOR
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  athlete      Athlete?
+  ageGuesses   AgeGuess[]
+  ownedLeagues League[]   @relation("LeagueOwner")
+
+  @@index([clerkId])
+  @@index([email])
+}
+
+// ============================================
+// BOUNDED CONTEXT: Competition
+// ============================================
+// Core domain: Athletes compete by submitting biomarkers.
+// Athlete is an AGGREGATE ROOT with Submissions as entities.
+// Invariants: Must have valid division/generation, at least 1 league membership.
+
+model Athlete {
+  id     String @id @default(cuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  displayName    String
+  slug           String  @unique
+  profilePicture String?
+  bio            String?
+
+  birthYear        Int
+  chronologicalAge Int
+  division         String // MENS, WOMENS, OPEN
+  generation       String // SILENT, BOOMER, GENX, MILLENNIAL, GENZ, GENALPHA
+
+  status     String    @default("PENDING") // PENDING, VERIFIED, SUSPENDED
+  verified   Boolean   @default(false)
+  verifiedAt DateTime?
+  verifiedBy String?
+
+  mediaContact String?
+  website      String?
+  twitter      String?
+  instagram    String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  submissions        BiomarkerSubmission[]
+  badges             AthleteBadge[]
+  leaderboardEntries LeaderboardEntry[]
+  guessMyAgeGame     GuessMyAgeGame?
+  events             Event[]
+  leagueMemberships  LeagueMember[] // Athletes MUST have at least 1 league
+
+  @@index([slug])
+  @@index([division])
+  @@index([generation])
+  @@index([status])
+}
+
+// ============================================
+// VALUE OBJECT: Biomarker Submission
+// ============================================
+// Represents a point-in-time biomarker reading.
+// Contains 9 biomarkers required for PhenoAge calculation.
+// EXTENSION POINT: Add new biomarkers here (e.g., telomere length, DNA methylation).
+
+model BiomarkerSubmission {
+  id        String  @id @default(cuid())
+  athleteId String
+  athlete   Athlete @relation(fields: [athleteId], references: [id], onDelete: Cascade)
+  seasonId  String
+  season    Season  @relation(fields: [seasonId], references: [id])
+
+  // League context - REQUIRED (leagues-first architecture)
+  leagueId String
+  league   League @relation(fields: [leagueId], references: [id])
+
+  submittedAt DateTime @default(now())
+
+  // Biomarkers
+  albumin           Float
+  creatinine        Float
+  glucose           Float
+  crp               Float
+  lymphocytePercent Float
+  mcv               Float
+  rdw               Float
+  alp               Float
+  wbc               Float
+
+  // Calculated Values
+  phenoAge     Float
+  ageReduction Float
+  paceOfAging  Float
+
+  // Verification
+  proofImages     Json      @default("[]") // JSON array of proof image URLs
+  status          String    @default("PENDING") // PENDING, APPROVED, REJECTED
+  verifiedBy      String?
+  verifiedAt      DateTime?
+  rejectionReason String?
+  notes           String?
+
+  // OCR extraction metadata
+  ocrJobId            String? // Reference to OCR processing job
+  ocrConfidenceScores Json?   // { albumin: 0.95, creatinine: 0.87, ... }
+  entryMethod         String  @default("MANUAL") // MANUAL, OCR_ASSISTED
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([athleteId])
+  @@index([seasonId])
+  @@index([leagueId])
+  @@index([status])
+  @@index([submittedAt])
+  @@index([entryMethod])
+}
+
+// ============================================
+// AGGREGATE: Season & Leaderboards
+// ============================================
+// Season is an AGGREGATE ROOT that scopes competition periods.
+// LeaderboardEntry is a derived entity updated when submissions are approved.
+// Invariants: Exactly one ACTIVE season at a time.
+
+model Season {
+  id   String @id @default(cuid())
+  name String
+  year Int
+  slug String @unique
+
+  startDate          DateTime
+  endDate            DateTime
+  submissionDeadline DateTime
+
+  status String @default("UPCOMING") // UPCOMING, ACTIVE, COMPLETED
+
+  // Prize Pool
+  prizePoolBTC   Float   @default(0)
+  prizePoolUSD   Float   @default(0)
+  prizeGoalBTC   Float   @default(1)
+  prizeGoalUSD   Float   @default(100000)
+  bitcoinAddress String?
+
+  // Distribution percentages
+  firstPlacePct  Int @default(60)
+  secondPlacePct Int @default(25)
+  thirdPlacePct  Int @default(15)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  submissions              BiomarkerSubmission[]
+  leaderboardEntries       LeaderboardEntry[]
+  leagueLeaderboardEntries LeagueLeaderboardEntry[]
+  events                   Event[]
+  donations                Donation[]
+
+  @@index([slug])
+  @@index([status])
+  @@index([year])
+}
+
+model LeaderboardEntry {
+  id        String  @id @default(cuid())
+  athleteId String
+  athlete   Athlete @relation(fields: [athleteId], references: [id], onDelete: Cascade)
+  seasonId  String
+  season    Season  @relation(fields: [seasonId], references: [id])
+
+  rank         Int
+  previousRank Int?
+
+  bestPhenoAge     Float
+  bestAgeReduction Float
+  bestPaceOfAging  Float
+  submissionCount  Int   @default(1)
+
+  divisionRank   Int?
+  generationRank Int?
+
+  updatedAt DateTime @updatedAt
+
+  @@unique([athleteId, seasonId])
+  @@index([seasonId, rank])
+  @@index([athleteId])
+}
+
+// ============================================
+// BOUNDED CONTEXT: Gamification
+// ============================================
+// Badges and achievements to drive engagement.
+// Badge requirements can be JSON-encoded rules for flexible criteria.
+//
+// BADGE CATEGORIES:
+// - ACHIEVEMENT: Completing specific actions (verified, consistency)
+// - MILESTONE: Reaching quantitative goals (age reduction, submissions)
+// - COMPETITION: Ranking-based achievements (top 10, podium)
+// - COMMUNITY: Social and helping others
+// - SPECIAL: Rare/unique achievements (pioneer, perfect score)
+// - LEAGUE: Team-based achievements (founder, champion, MVP)
+// - BIOMARKER: Specific biomarker excellence (inflammation, metabolic)
+// - IMPROVEMENT: Progress tracking (rising star, comeback, streak)
+// - SEASONAL: Time-limited events (founding season, holiday)
+// - SCIENCE: Research contribution (OCR pioneer, data donor)
+
+model Badge {
+  id          String @id @default(cuid())
+  name        String @unique
+  slug        String @unique
+  description String
+  icon        String
+  category    String // See categories above
+
+  // Requirements for earning (optional JSON)
+  requirements String?
+
+  createdAt DateTime @default(now())
+
+  athletes AthleteBadge[]
+
+  @@index([category])
+}
+
+model AthleteBadge {
+  id        String  @id @default(cuid())
+  athleteId String
+  athlete   Athlete @relation(fields: [athleteId], references: [id], onDelete: Cascade)
+  badgeId   String
+  badge     Badge   @relation(fields: [badgeId], references: [id])
+
+  earnedAt DateTime @default(now())
+
+  @@unique([athleteId, badgeId])
+  @@index([athleteId])
+  @@index([badgeId])
+}
+
+// ============================================
+// FEATURE: Guess My Age Game
+// ============================================
+// Viral engagement feature where visitors guess athletes' ages.
+// Aggregates statistics for display on athlete profiles.
+
+model GuessMyAgeGame {
+  id        String  @id @default(cuid())
+  athleteId String  @unique
+  athlete   Athlete @relation(fields: [athleteId], references: [id], onDelete: Cascade)
+
+  totalGuesses Int   @default(0)
+  averageGuess Float @default(0)
+
+  guesses AgeGuess[]
+
+  updatedAt DateTime @updatedAt
+}
+
+model AgeGuess {
+  id     String         @id @default(cuid())
+  gameId String
+  game   GuessMyAgeGame @relation(fields: [gameId], references: [id], onDelete: Cascade)
+
+  userId    String?
+  user      User?   @relation(fields: [userId], references: [id])
+  visitorId String? // For anonymous users
+
+  guessedAge Int
+  actualAge  Int
+  difference Int
+
+  guessedAt DateTime @default(now())
+
+  @@index([gameId])
+  @@index([userId])
+  @@index([visitorId])
+}
+
+// ============================================
+// DOMAIN EVENTS: Activity Feed
+// ============================================
+// Domain events for activity tracking and notifications.
+// EXTENSION POINT: Add new event types as features grow.
+// Events are immutable after creation (append-only log).
+
+model Event {
+  id   String @id @default(cuid())
+  type String // ATHLETE_JOINED, RANK_CHANGED, BADGE_EARNED, etc.
+
+  athleteId String?
+  athlete   Athlete? @relation(fields: [athleteId], references: [id], onDelete: SetNull)
+  seasonId  String?
+  season    Season?  @relation(fields: [seasonId], references: [id])
+
+  message String
+  data    Json?   // Event data payload
+
+  createdAt DateTime @default(now())
+
+  @@index([type])
+  @@index([athleteId])
+  @@index([seasonId])
+  @@index([createdAt])
+}
+
+// ============================================
+// FEATURE: Prize Pool Donations
+// ============================================
+// Bitcoin donations to the seasonal prize pool.
+// Tracks both BTC and USD values at time of donation.
+
+model Donation {
+  id       String @id @default(cuid())
+  seasonId String
+  season   Season @relation(fields: [seasonId], references: [id])
+
+  amountBTC Float
+  amountUSD Float
+  txHash    String? @unique
+
+  donorName    String?
+  donorMessage String?
+  anonymous    Boolean @default(true)
+
+  confirmedAt DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([seasonId])
+  @@index([txHash])
+}
+
+// ============================================
+// AGGREGATE: Leagues & Organizations
+// ============================================
+// Leagues are the PRIMARY organizational unit (leagues-first architecture).
+// Athletes MUST belong to at least one league to participate.
+// League is an AGGREGATE ROOT with Members, Invites, and Subscriptions.
+//
+// INVARIANTS:
+// - Athletes can belong to max 3 leagues
+// - Member count limited by tier (FREE=10, STARTER=50, PRO=250, ENTERPRISE=unlimited)
+// - Only ACTIVE leagues accept submissions
+//
+// EXTENSION POINT: Add new LeagueType values for different organization types.
+
+enum LeagueType {
+  CLINIC // Longevity clinics
+  CORPORATE // Corporate wellness programs
+  COLLECTIVE // Biohacker collectives
+  GEOGRAPHIC // City/country per capita
+  CUSTOM // Custom league type
+}
+
+enum LeagueTier {
+  FREE // 10 members, basic features
+  STARTER // 50 members, custom branding
+  PRO // 250 members, white-label
+  ENTERPRISE // Unlimited, dedicated instance
+}
+
+enum LeagueMemberRole {
+  MEMBER
+  CAPTAIN
+  ADMIN
+}
+
+model League {
+  id          String     @id @default(cuid())
+  name        String
+  slug        String     @unique
+  description String?
+  logo        String?
+  type        LeagueType
+  tier        LeagueTier @default(FREE)
+
+  // Geographic (for city/country leagues)
+  country String?
+  city    String?
+
+  // Status & Verification (Payment-gated)
+  // FREE tier: status=PENDING until admin approves
+  // PAID tiers: auto-approve on successful payment
+  status     String    @default("PENDING") // PENDING, ACTIVE, SUSPENDED
+  verified   Boolean   @default(false)
+  verifiedAt DateTime?
+  verifiedBy String? // Admin userId or "PAYMENT_AUTO"
+
+  // Ownership
+  ownerId String
+  owner   User   @relation("LeagueOwner", fields: [ownerId], references: [id])
+
+  // Relationships
+  members            LeagueMember[]
+  leaderboardEntries LeagueLeaderboardEntry[]
+  subscriptions      LeagueSubscription[]
+  submissions        BiomarkerSubmission[]
+  invites            LeagueInvite[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([slug])
+  @@index([type])
+  @@index([tier])
+  @@index([status])
+  @@index([ownerId])
+}
+
+model LeagueMember {
+  id        String  @id @default(cuid())
+  leagueId  String
+  league    League  @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  athleteId String
+  athlete   Athlete @relation(fields: [athleteId], references: [id], onDelete: Cascade)
+
+  role     LeagueMemberRole @default(MEMBER)
+  joinedAt DateTime         @default(now())
+
+  @@unique([leagueId, athleteId])
+  @@index([athleteId]) // For enforcing max 3 leagues per athlete
+  @@index([leagueId])
+}
+
+model LeagueLeaderboardEntry {
+  id       String @id @default(cuid())
+  leagueId String
+  league   League @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  seasonId String
+  season   Season @relation(fields: [seasonId], references: [id])
+
+  rank         Int
+  previousRank Int?
+
+  // Aggregate metrics (Top 10 members scoring)
+  avgAgeReduction Float // Average of top 10 (or all if <10) members
+  totalMembers    Int // Total members in league
+  activeMembers   Int // Members with submissions this season
+  bestIndividual  Float // Best member's age reduction
+  worstIndividual Float // Worst of top 10 (or all if <10)
+
+  updatedAt DateTime @updatedAt
+
+  @@unique([leagueId, seasonId])
+  @@index([seasonId, rank])
+  @@index([leagueId])
+}
+
+model LeagueSubscription {
+  id       String @id @default(cuid())
+  leagueId String
+  league   League @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+
+  tier                 LeagueTier
+  stripeCustomerId     String?
+  stripeSubscriptionId String?
+
+  currentPeriodStart DateTime
+  currentPeriodEnd   DateTime
+  status             String   @default("ACTIVE") // ACTIVE, PAST_DUE, CANCELED
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([leagueId])
+  @@index([stripeCustomerId])
+}
+
+model LeagueInvite {
+  id       String @id @default(cuid())
+  leagueId String
+  league   League @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+
+  email      String
+  role       LeagueMemberRole @default(MEMBER)
+  token      String           @unique // For secure invite links
+  expiresAt  DateTime
+  acceptedAt DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@index([leagueId])
+  @@index([email])
+  @@index([token])
+}
+
+// ============================================
+// SERVICE: OCR Processing Jobs
+// ============================================
+// Async job queue for OCR processing of lab report uploads.
+// Supports PDF and image formats (PNG, JPEG, HEIC, WebP, TIFF).
+//
+// EXTENSION POINT: Add new file types or OCR providers.
+// Current implementation uses Tesseract.js; could add:
+// - Google Vision API for higher accuracy
+// - AWS Textract for structured document extraction
+// - Custom ML models for specific lab report formats
+
+model OcrJob {
+  id     String @id @default(cuid())
+  userId String
+
+  status String @default("PENDING") // PENDING, PROCESSING, COMPLETED, FAILED
+
+  // File info
+  originalFileName String
+  fileType         String // pdf, png, jpg, jpeg
+  fileSize         Int
+  pageCount        Int    @default(1)
+
+  // Processing results
+  extractedValues Json?   // { albumin: { value: 4.2, confidence: 0.95, ... }, ... }
+  rawOcrText      String? // Full OCR output text
+  processingTime  Int? // Processing time in milliseconds
+  errorMessage    String? // Error message if failed
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  completedAt DateTime?
+
+  @@index([userId])
+  @@index([status])
+  @@index([createdAt])
+}

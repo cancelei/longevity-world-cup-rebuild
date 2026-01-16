@@ -1,0 +1,291 @@
+@import "tailwindcss";
+
+/* Longevity World Cup 2.0 Design System */
+
+:root {
+  /* Primary Colors */
+  --color-primary: #00BCD4;
+  --color-primary-hover: #00ACC1;
+  --color-primary-light: #B2EBF2;
+  --color-primary-dark: #0097A7;
+
+  /* Secondary Colors */
+  --color-secondary: #FF4081;
+  --color-secondary-hover: #F50057;
+  --color-secondary-light: #FF80AB;
+  --color-secondary-dark: #C51162;
+
+  /* Semantic Colors */
+  --color-success: #4CAF50;
+  --color-success-light: #81C784;
+  --color-warning: #FFC107;
+  --color-warning-light: #FFD54F;
+  --color-error: #F44336;
+  --color-error-light: #E57373;
+  --color-info: #2196F3;
+
+  /* Background Colors (Dark Theme) */
+  --background: #0D0D1A;
+  --background-secondary: #1A1A2E;
+  --background-tertiary: #16213E;
+  --background-card: #1E1E32;
+  --background-elevated: #252542;
+
+  /* Text Colors */
+  --foreground: #FFFFFF;
+  --foreground-secondary: #B0B0C0;
+  --foreground-muted: #6B6B80;
+
+  /* Border Colors */
+  --border: #2A2A40;
+  --border-light: #3A3A50;
+
+  /* Glow Effects */
+  --glow-primary: 0 0 20px rgba(0, 188, 212, 0.3);
+  --glow-secondary: 0 0 20px rgba(255, 64, 129, 0.3);
+  --glow-success: 0 0 20px rgba(76, 175, 80, 0.3);
+
+  /* Spacing */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+  --radius-full: 9999px;
+
+  /* Transitions */
+  --transition-fast: 150ms ease;
+  --transition-normal: 300ms ease;
+  --transition-slow: 500ms ease;
+
+  /* Z-Index Scale */
+  --z-dropdown: 100;
+  --z-modal: 200;
+  --z-tooltip: 300;
+  --z-toast: 400;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-primary: var(--color-primary);
+  --color-secondary: var(--color-secondary);
+  --font-sans: "Inter", system-ui, sans-serif;
+  --font-display: "Orbitron", "Inter", sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
+}
+
+/* Base Styles */
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  line-height: 1.6;
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--background-secondary);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border-light);
+  border-radius: var(--radius-full);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--foreground-muted);
+}
+
+/* Selection */
+::selection {
+  background: var(--color-primary);
+  color: var(--background);
+}
+
+/* Focus Styles */
+:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+/* Typography Classes */
+.font-display {
+  font-family: var(--font-display);
+}
+
+.text-gradient {
+  background: linear-gradient(135deg, var(--color-primary), var(--color-secondary));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Glow Effects */
+.glow-primary {
+  box-shadow: var(--glow-primary);
+}
+
+.glow-secondary {
+  box-shadow: var(--glow-secondary);
+}
+
+.glow-success {
+  box-shadow: var(--glow-success);
+}
+
+/* Card Styles */
+.card {
+  background: var(--background-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  transition: all var(--transition-normal);
+}
+
+.card:hover {
+  border-color: var(--border-light);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+/* Glass Effect */
+.glass {
+  background: rgba(30, 30, 50, 0.8);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Gradient Backgrounds */
+.bg-gradient-dark {
+  background: linear-gradient(180deg, var(--background) 0%, var(--background-secondary) 100%);
+}
+
+.bg-gradient-radial {
+  background: radial-gradient(ellipse at center, var(--background-tertiary) 0%, var(--background) 70%);
+}
+
+/* Badge Colors */
+.badge-gold {
+  background: linear-gradient(135deg, #FFD700, #FFA500);
+  color: #000;
+}
+
+.badge-silver {
+  background: linear-gradient(135deg, #C0C0C0, #808080);
+  color: #000;
+}
+
+.badge-bronze {
+  background: linear-gradient(135deg, #CD7F32, #8B4513);
+  color: #FFF;
+}
+
+/* Rank Change Indicators */
+.rank-up {
+  color: var(--color-success);
+}
+
+.rank-down {
+  color: var(--color-error);
+}
+
+.rank-new {
+  color: var(--color-info);
+}
+
+/* Animation Classes */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes pulse-glow {
+  0%, 100% {
+    box-shadow: 0 0 5px var(--color-primary);
+  }
+  50% {
+    box-shadow: 0 0 20px var(--color-primary), 0 0 30px var(--color-primary);
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.animate-fade-in {
+  animation: fadeIn var(--transition-normal) ease-out;
+}
+
+.animate-slide-up {
+  animation: slideUp var(--transition-normal) ease-out;
+}
+
+.animate-pulse-glow {
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+.animate-shimmer {
+  background: linear-gradient(
+    90deg,
+    var(--background-card) 25%,
+    var(--background-elevated) 50%,
+    var(--background-card) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+/* Responsive Utilities */
+@media (max-width: 768px) {
+  :root {
+    --radius-lg: 12px;
+    --radius-xl: 16px;
+  }
+}
+
+/* Print Styles */
+@media print {
+  body {
+    background: white;
+    color: black;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+}

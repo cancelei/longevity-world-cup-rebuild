@@ -1,0 +1,33 @@
+# Dependencies
+node_modules
+.pnp
+.pnp.js
+
+# Build outputs
+.next
+out
+build
+dist
+coverage
+
+# Generated files
+*.generated.*
+prisma/migrations
+
+# Lock files
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# Cache
+.turbo
+.vercel
+.eslintcache
+
+# Database
+*.db
+*.db-journal
+
+# Misc
+*.min.js
+*.min.css

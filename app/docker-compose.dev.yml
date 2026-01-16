@@ -1,0 +1,38 @@
+# Development Docker Compose with PostgreSQL
+# Usage: docker compose -f docker-compose.dev.yml up -d
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: lwc-postgres-dev
+    environment:
+      POSTGRES_USER: lwc_user
+      POSTGRES_PASSWORD: lwc_dev_password
+      POSTGRES_DB: longevity_world_cup
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres-dev-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lwc_user -d longevity_world_cup"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # Optional: pgAdmin for database management
+  # pgadmin:
+  #   image: dpage/pgadmin4:latest
+  #   container_name: lwc-pgadmin-dev
+  #   environment:
+  #     PGADMIN_DEFAULT_EMAIL: admin@example.com
+  #     PGADMIN_DEFAULT_PASSWORD: admin
+  #   ports:
+  #     - "5050:80"
+  #   depends_on:
+  #     - postgres
+  #   restart: unless-stopped
+
+volumes:
+  postgres-dev-data:
+    driver: local
